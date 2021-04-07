@@ -9,6 +9,7 @@ import time
 import matplotlib.pyplot as plt
 
 NB_SENSOR_CHANNELS = 15
+
 """ def normalization (data,max,min):
     
     _range = max - min
@@ -19,17 +20,18 @@ NB_SENSOR_CHANNELS = 15
     data[data < 0] = 0.00
     return data """
 
+
 def find_dir(dir):
     path_dir = []
     print("not sorted")
     for path in glob.iglob('**/*.csv',recursive=True):
-        if path.find("seg")==-1 and path.find("mobile")==-1 and path.find('sim') == -1 and path.find('test') == -1:
+        if path.find("seg")==-1 and path.find("mobile")==-1 and path.find('sim') == -1 and path.find('test') == -1 and path.find('labels') == -1:
             path_dir.append(path)
-            print(path)
+            #print(path)
     
     path_dir = sorted(path_dir)
-    print("sorted")
-    print(path_dir)
+    #print("sorted")
+    #print(path_dir)
     return path_dir
 
 def processing(p_unique):
@@ -37,15 +39,16 @@ def processing(p_unique):
     for p in p_unique:
         target = p + "\\sim_dataset.csv"
         df = pd.read_csv(target,header=None)
-        data = data.append(df)
-        print("append one data sample")
-    print("data:\n",data)
+        data = data.append(df)        
+    #print("data:\n",data)
     #data.to_csv('D:\\test\\project2files\\files\\down\\test.csv',header = False,index = False)
-    x = data.iloc[:,1:]
-    y = data.iloc[:,0]
-    
+    x = data.iloc[:,1:-1]
+    y = data.iloc[:,-1]
+    #print(x)
+    #print(y)
     data_x = x.to_numpy()
     data_y = y.to_numpy()
+    
     
     return data_x,data_y
 
@@ -68,12 +71,45 @@ def generate_data(target_filename,p_unique):
 def generate_fake_label(lenth):
     x = list(range(1,lenth))
     y = list()
-    for item in x:
-        if item % 7 == 0:
-            y.append(1)
-        else:
-            y.append(0)
-    return pd.Series(y)
+    y = np.random.randint(3,size=lenth)
+    #return pd.Series(y)
+    return y
+
+def create_label_series(lenth,label):
+    
+    y = label*np.ones(lenth)
+    return y
+
+def create_labels(p_unique):
+    pre_states = []
+    pre_act = []
+    #print(p_unique)
+    for id in p_unique:
+        print(id)
+        l=id.split('\\')
+        pre_states.append(l[0]) 
+        pre_act.append(l[1])
+    
+    state = list(set(pre_states))
+    state = sorted(state)
+    action = list(set(pre_act)) 
+    action = sorted(action)  
+    size = len(state)*len(action)
+    
+    labels = np.arange(size).reshape(len(state),len(action))
+    print(labels)
+    df = pd.DataFrame(labels,columns=action,index=state)
+    print(df) 
+    cwd = os.getcwd()
+    path = cwd + "/labels.csv"
+    df.to_csv(path)
+    return df
+
+def select_label(dataframe,path):
+    l=path.split('\\')
+    state,action = l[0],l[1]
+    label = dataframe.loc[state][action]
+    return label
 
 def load_data (files):
     #labels = list(set([id.split('\\')[2] for id in files]))
@@ -82,77 +118,80 @@ def load_data (files):
         (path,t_filename) = os.path.split(file)
         p.append(path)
     p_unique = list(set(p))
-    print("p_unique")
-    print(p_unique)
-    """ for f in p_unique:
-        data_y = np.random.randint(0,2,len(df_norm))
-        data = f + "\\" + "sim_dataset.csv" """
-
+    label_df = create_labels(p_unique)
+    
     for f in files:               
         #df =  pd.read_csv(f,usecols = [2,3,4],header = None)
+        print("-------------->",f)
+        label = select_label(label_df,f)
+        print(label)
         df = resample_f(f)
         df[2] = df[2].astype('float64')
         df[3] = df[3].astype('float64')
         df[4] = df[4].astype('float64')
-
+        #print("after resampling:\n",df)
         max = df.max()
         min = df.min()
-        print(f)
-        print(max)
-        print(min)
         df_norm = (df - min) / (max - min)
-        print(df_norm)
-        #data_x = df_norm.to_numpy()
         (temp,t_name) = os.path.split(f)
         # 5 kinds of sensors
         if not path == temp:
             path = temp
-            count = 1
-            #data_y = np.random.randint(0,2,len(df_norm))
-            data_y = generate_fake_label(len(df_norm))
+            count = 1           
             data_path = temp + '\\sim_dataset.csv'
-            print("--------------------------\ndata_y", len(data_y))
-            #with open(data_path,'w')
-            df_norm.insert(0,'label',data_y)
             df_final = df_norm
-            print('_______________new df__________________')
+            print('_________________new df__________________')
             print(df_final)
-            print('_____________end new df__________________')
+            print('_______________end new df________________')
             
         else:
             df_final = pd.concat([df_final,df_norm],axis = 1)
             count+=1
-            if count == 5:
+            if count == 5:               
+                df_final = df_final.dropna(how='any')                
+                #data_y = generate_fake_label(df_final.shape[0])
+                data_y = create_label_series(df_final.shape[0],label)
+                print(data_y)
+                df_final['label'] = pd.Series(data_y,index=df_final.index)
+                print(">>>>>>>>>>>>>inserted labels<<<<<<<<<<<<<")
+                print(df_final)                
+                print('---------------drop it ------------------')
                 print(df_final)
-                df_final = df_final.dropna(how='any')
-                print('------------drop it ---------------')
-                print(df_final)
-                df_final.to_csv(data_path,header = False,index = False)
+                df_final.to_csv(data_path,header = False)
     return p_unique
 
 def resample_f(file):
-    print(file)
-    df = pd.read_csv(file,usecols = [0,2,3,4],header = None)  
+    #print(file)
+    (path,t_filename) = os.path.split(file) 
+    (name,extension) = os.path.splitext(t_filename) #split the file path
+    new_f = name + ".png"
+    new_p = os.path.join(path,new_f)
+
+    df = pd.read_csv(file,usecols = [0,2,3,4],header = None)      
     y = pd.to_datetime(df[0],unit='ms')   
-    print(df)
-    df.plot.scatter(x=0,y=4)
+    #print(df)    
     df[0] = y
-    #df2 = df.set_index(0).resample('20ms').interpolate('linear')
+    
+    #plt.figure()
+    plt.cla()
+    ax = plt.gca()
+    df.plot(x=0,y=2,style='b*-',label='origin',ax=ax)
+    
     df2 = df.set_index(0).resample('20ms').mean()
+    
     df3 = df2.interpolate(method ='linear')
-    print(df2) 
-    df2.plot(y=4)
-    df3.plot(y=4)
     df = df3 #successfully resampled
-    """ df3.plot(x='0',y='2')
-    df.plot(x='0',y='2') """
-    plt.show()
-    #df2.to_csv('D:\\test\\project2files\\files\\left\\20210206103331721\\test.csv', header = None )
+     
+    df2.reset_index().plot(x=0,y=2,label = "mean resample",color='Red',marker= 'o',ax = ax)
+    
+    plot_f = df3.plot(y=2,color="Green",label="interpolated",ax = ax)   
+    #plt.show()
+    fig = plot_f.get_figure()
+    fig.savefig(new_p)  
+    
+           
     return df
-
-    
-    
-
+  
 
 def preprocess(dir):
     files = []
@@ -164,7 +203,7 @@ def preprocess(dir):
 
 
 if __name__ == '__main__':
-    base_path = 'D:\\test\\project2files\\sitting\\down'
+    base_path = 'D:\\test\\project2files'
     os.chdir(base_path) #change path
-    #resample_f('D:\\test\\project2files\\walking\\null\\20210329103941937\\grav_watch.csv')
     preprocess(base_path)
+    print("done")
