@@ -203,7 +203,7 @@ def preprocess(dir):
 
 
 if __name__ == '__main__':
-    base_path = 'D:\\test\\project2files'
+    base_path = 'D:\\test\\project2files\\2\\files'
     os.chdir(base_path) #change path
     preprocess(base_path)
     print("done")
