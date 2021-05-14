@@ -8,6 +8,7 @@ from datetime import datetime
 import time 
 import matplotlib.pyplot as plt
 import random
+import statistics as stc
 
 NB_SENSOR_CHANNELS = 15
 TRAINING_PERCENTAGE = 0.8
@@ -27,8 +28,8 @@ def find_dir(dir):
     path_dir = []
     print("not sorted")
     for path in glob.iglob('**/*.csv',recursive=True):
-        if path.find("seg")==-1 and path.find("mobile")==-1 and path.find('sim') == -1  and path.find('labels') == -1 and path.find('sitting')== -1  and path.find('test')== -1 :
-            #if path.find("Back")==-1 and path.find("up")==-1 and path.find("left")==-1 and path.find("down")==-1 and path.find("right")==-1 and path.find("null")==-1:
+        if path.find("seg")==-1 and path.find("mobile")==-1 and path.find('sim') == -1 and path.find('labels') == -1 and path.find('sitting')== -1  :
+            #if path.find("Back")==-1  :
             path_dir.append(path)
             #print(path)
     
@@ -152,6 +153,13 @@ def select_label(dataframe,path):
     label = dataframe.loc[state][action]
     return label
 
+def drawCumulativeHist(lengths):
+    plt.hist(lengths, bins = 20, facecolor= "blue",edgecolor="black", alpha=0.7)
+    plt.xlabel('Lengths')
+    plt.ylabel('Frequency')
+    plt.title('Lengths Of Samples')
+    plt.show()
+
 def load_data (files):
     #labels = list(set([id.split('\\')[2] for id in files]))
     p = []        
@@ -160,6 +168,8 @@ def load_data (files):
         p.append(path)
     p_unique = list(set(p))
     label_df,state,action = create_labels(p_unique)
+
+    lengths = []
     
     for f in files:               
         #df =  pd.read_csv(f,usecols = [2,3,4],header = None)
@@ -208,12 +218,12 @@ def load_data (files):
                 data_y = create_label_series(df_final.shape[0],label)
                 #print(data_y)
                 df_final['label'] = pd.Series(data_y,index=df_final.index)
-                print(">>>>>>>>>>>>>inserted labels<<<<<<<<<<<<<")
+                """ print(">>>>>>>>>>>>>inserted labels<<<<<<<<<<<<<")
                 print(df_final)                
-                print('---------------drop it ------------------')
-                
+                print('---------------drop it ------------------') """
+                lengths.append(df_final.shape[0])
                 df_final.to_csv(data_path,header = False)
-    return state,action
+    return state,action,lengths
 
 def resample_f(file):
     #print(file)
@@ -252,10 +262,13 @@ def preprocess(dir):
     files = []
     p_unique = []
     files = find_dir(dir)
-    state,action = load_data(files)
+    state,action,lengths = load_data(files)
     target_filename = "C:\\Users\\Zhiha\\Documents\\file_only\\research\\tool_program\\ori\\Sensor-Based-Human-Activity-Recognition-DeepConvLSTM-Pytorch\\data\\processed\\mygestures_ww.data"
     #generate_data(target_filename,p_unique)
     shuffle_data(state,action,target_filename)
+    drawCumulativeHist(lengths)
+    b = stc.mean(lengths)
+    print(b*20/1000)
 
 
 if __name__ == '__main__':
